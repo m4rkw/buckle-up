@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+
+# log show --color none --style json --start '2019-01-28 00:00:00' --predicate '(process == "kernel") && (messageType == "error") && (sender == "Sandbox") && (eventMessage contains "Discord")'
+
+import os
+import sys
+import time
+import re
+import datetime
+import json
+import subprocess
+
+VERSION = '0.0.2'
+
+
+class BuckleUp:
+
+  def __init__(self, args):
+    self.banner()
+    self.process_names = []
+    self.profile_filename = None
+    self.denied_action_list = {}
+
+    self.parse_args(args)
+    self.monitor()
+
+
+  def parse_args(self, args):
+    for i in range(0, len(args)):
+      if args[i] == '-h':
+        self.usage()
+      if args[i] == '-p' and i+1 < len(args):
+        self.process_names = args[i+1].split(',')
+      if args[i] == '-o' and i+1 < len(args):
+        self.profile_filename = args[i+1]
+
+        try:
+          with open(self.profile_filename, 'a+') as f:
+            pass
+        except:
+          print("unable to open profile '%s' for writing" % (self.profile_filename))
+          sys.exit(1)
+
+    if self.process_names == []:
+      self.usage()
+
+
+  def banner(self):
+    print("\nbuckle-up version %s\n" % (VERSION))
+
+
+  def usage(self):
+    print("usage: %s [-h] [-p all | <process name>][,<process name>][..] [-o <filename>]\n" % (sys.argv[0]))
+    print(" -h                    : show this help")
+    print(" -p <process name>/all : filter to specific processes or 'all' for everything")
+    print(" -o <filename>         : convert deny events to sandbox profile\n")
+    print("examples:\n")
+    print("%s -p all" % (sys.argv[0]))
+    print("%s -p 'Slack,Slack Helper'" % (sys.argv[0]))
+    print("%s -p 'Slack,Slack Helper' -o slack.sb\n" % (sys.argv[0]))
+
+    sys.exit(0)
+
+
+  def generate_predicate(self):
+    predicate = '(process == "kernel") && (messageType == "error") && (sender == "Sandbox")'
+
+    if self.process_names != ['all']:
+      predicate += ' && ('
+
+      for i in range(0, len(self.process_names)):
+        if i >0:
+          predicate += ' || '
+        predicate += '(eventMessage contains "%s")' % (self.process_names[i])
+
+      predicate += ')'
+
+    return predicate
+
+
+  def monitor(self):
+    while 1:
+      p = subprocess.Popen(['/usr/bin/log','stream','--color','none','--style','json','--predicate',self.generate_predicate()], stdout=subprocess.PIPE)
+
+      skip_line = True
+      json_obj = ''
+
+      for line in p.stdout: 
+        if skip_line:
+          skip_line = False
+          continue
+
+        line = line.decode("utf-8")
+
+        if line.rstrip() == '[{':
+          json_obj = '{'
+        elif line.rstrip() == '},{':
+          item = json.loads(json_obj + '}')
+
+          self.process_sandbox_message(item)
+
+          print("%s: %s" % (item['timestamp'], item['eventMessage']))
+
+          json_obj = '{'
+        else:
+          json_obj += line
+
+
+  def process_sandbox_message(self, event):
+    if self.profile_filename:
+      self.add_event_to_profile(event)
+
+
+  def add_event_to_profile(self, event):
+    match = re.match('^Sandbox: .*?\([\d]+\) [\w]+\([\d]+\) (.*?) (.*?)$', event['eventMessage'])
+
+    if not match:
+      print("regex failed: %s" % (sandbox_msg))
+      sys.exit(1)
+
+    if match.group(1) not in self.denied_action_list.keys():
+      self.denied_action_list[match.group(1)] = []
+
+    if match.group(2) not in self.denied_action_list[match.group(1)]:
+      self.denied_action_list[match.group(1)].append(match.group(2))
+
+    self.write_profile()
+
+
+  def write_profile(self):
+    with open(self.profile_filename, 'w') as f:
+      f.write('(version 1)\n\n')
+      f.write('(deny default)\n\n')
+
+      for action in sorted(self.denied_action_list.keys()):
+        f.write("(allow %s\n" % (action))
+
+        for path in sorted(self.denied_action_list[action]):
+          f.write("  (literal \"%s\")\n" % (path))
+
+        f.write(")\n\n")
+
+
+BuckleUp(sys.argv[1:])
+
+

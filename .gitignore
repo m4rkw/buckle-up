@@ -1,0 +1,3 @@
+build/*
+dist/*
+buckle_up.egg-info/*
