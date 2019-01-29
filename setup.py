@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="buckle-up",
-    version="0.0.2",
+    version="0.0.3",
     author="Mark Wadham",
     author_email="buckle-up@rkw.io",
     description="Buckle-up: a toolbox for writing macOS sandbox profiles",

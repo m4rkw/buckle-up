@@ -10,7 +10,7 @@ import datetime
 import json
 import subprocess
 
-VERSION = '0.0.2'
+VERSION = '0.0.3'
 
 
 class BuckleUp:
@@ -50,14 +50,16 @@ class BuckleUp:
 
 
   def usage(self):
-    print("usage: %s [-h] [-p all | <process name>][,<process name>][..] [-o <filename>]\n" % (sys.argv[0]))
+    cmd = sys.argv[0].split('/')[-1]
+
+    print("usage: %s [-h] [-p all | <process name>][,<process name>][..] [-o <filename>]\n" % (cmd))
     print(" -h                    : show this help")
     print(" -p <process name>/all : filter to specific processes or 'all' for everything")
     print(" -o <filename>         : convert deny events to sandbox profile\n")
     print("examples:\n")
-    print("%s -p all" % (sys.argv[0]))
-    print("%s -p 'Slack,Slack Helper'" % (sys.argv[0]))
-    print("%s -p 'Slack,Slack Helper' -o slack.sb\n" % (sys.argv[0]))
+    print("%s -p all" % (cmd))
+    print("%s -p 'Slack,Slack Helper'" % (cmd))
+    print("%s -p 'Slack,Slack Helper' -o slack.sb\n" % (cmd))
 
     sys.exit(0)
 
