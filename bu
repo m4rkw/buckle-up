@@ -10,7 +10,7 @@ import datetime
 import json
 import subprocess
 
-VERSION = '0.0.3'
+VERSION = '0.0.4'
 
 
 class BuckleUp:
@@ -117,14 +117,20 @@ class BuckleUp:
     match = re.match('^Sandbox: .*?\([\d]+\) [\w]+\([\d]+\) (.*?) (.*?)$', event['eventMessage'])
 
     if not match:
-      print("regex failed: %s" % (sandbox_msg))
-      sys.exit(1)
+      match = re.match('^Sandbox: .*?\([\d]+\) [\w]+\([\d]+\) (.*?)$', event['eventMessage'])
 
-    if match.group(1) not in self.denied_action_list.keys():
-      self.denied_action_list[match.group(1)] = []
+      if not match:
+        print("regex failed: %s" % (event['eventMessage']))
+        sys.exit(1)
 
-    if match.group(2) not in self.denied_action_list[match.group(1)]:
-      self.denied_action_list[match.group(1)].append(match.group(2))
+      if match.group(1) not in self.denied_action_list.keys():
+        self.denied_action_list[match.group(1)] = True
+    else:
+      if match.group(1) not in self.denied_action_list.keys():
+        self.denied_action_list[match.group(1)] = []
+
+      if match.group(2) not in self.denied_action_list[match.group(1)]:
+        self.denied_action_list[match.group(1)].append(match.group(2))
 
     self.write_profile()
 
@@ -135,12 +141,25 @@ class BuckleUp:
       f.write('(deny default)\n\n')
 
       for action in sorted(self.denied_action_list.keys()):
-        f.write("(allow %s\n" % (action))
+        if isinstance(self.denied_action_list[action], list):
+          f.write("(allow %s\n" % (action))
 
-        for path in sorted(self.denied_action_list[action]):
-          f.write("  (literal \"%s\")\n" % (path))
+          for path in sorted(self.denied_action_list[action]):
+            if action[0:4] == 'ipc-':
+              noun = 'ipc-posix-name'
+            elif action[0:16] == 'user-preference-':
+              noun = 'preference-domain'
+            elif action[0:6] == 'iokit-':
+              noun = 'iokit-user-client-class'
+            elif action[0:5] == 'mach-':
+              noun = 'global-name'
+            else:
+              noun = 'literal'
+            f.write("  (%s \"%s\")\n" % (noun, path))
 
-        f.write(")\n\n")
+          f.write(")\n\n")
+        else:
+          f.write("(allow %s)\n" % (action))
 
 
 BuckleUp(sys.argv[1:])
